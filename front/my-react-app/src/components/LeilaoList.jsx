@@ -1,61 +1,20 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 
 function LeilaoList({ userId, apiBaseUrl }) {
-    // 1. O estado inicial agora é um array vazio.
-    const [leiloes, setLeiloes] = useState([]);
-    const [lanceValor, setLanceValor] = useState({});
-    const [statusMensagem, setStatusMensagem] = useState({});
-    const [carregando, setCarregando] = useState(true);
-    const [erroCarga, setErroCarga] = useState(null);
+    const [leilaoId, setLeilaoId] = useState('');
+    const [lanceValor, setLanceValor] = useState('');
+    const [statusMensagem, setStatusMensagem] = useState(null);
 
-    // Efeito para buscar os leilões ativos quando o componente é montado
-    useEffect(() => {
-        const fetchLeiloes = async () => {
-            setCarregando(true);
-            setErroCarga(null);
-            
-            try {
-                // Requisição GET para buscar leilões ativos (Assume que o Gateway tem esta rota)
-                // O API Gateway deve rotear para o Serviço de Leilões
-                const response = await fetch(`${apiBaseUrl}/leiloes/ativos`);
-
-                if (!response.ok) {
-                    const errorData = await response.json().catch(() => ({}));
-                    throw new Error(errorData.erro || `Falha na busca: HTTP ${response.status}`);
-                }
-
-                const data = await response.json();
-                
-                // Assumindo que o backend retorna uma lista de objetos leilão
-                if (Array.isArray(data)) {
-                    setLeiloes(data);
-                } else {
-                    throw new Error("Formato de dados inesperado do servidor.");
-                }
-                
-            } catch (error) {
-                console.error("Erro ao carregar leilões:", error);
-                setErroCarga(`Erro ao carregar leilões: ${error.message}`);
-            } finally {
-                setCarregando(false);
-            }
-        };
-
-        fetchLeiloes();
+    const handleFazerLance = async (event) => {
+        event.preventDefault(); // Impede o recarregamento da página
+        const valor = parseFloat(lanceValor);
         
-        // Retorno vazio, pois a busca é apenas na montagem
-    }, [apiBaseUrl]); // Roda apenas na montagem e se a URL da API mudar
+        if (!leilaoId || isNaN(valor) || valor <= 0) {
+            setStatusMensagem({ text: 'Por favor, insira um ID de leilão e um valor válido.', type: 'error' });
+            return;
+        }
 
-    const handleLanceChange = (id, value) => {
-        setLanceValor(prev => ({ ...prev, [id]: value }));
-    };
-
-    const handleFazerLance = async (leilaoId) => {
-        const valor = parseFloat(lanceValor[leilaoId]);
-        
-        if (isNaN(valor) || valor <= 0) return setStatusMensagem(prev => ({ ...prev, [leilaoId]: 'Insira um valor válido.' }));
-
-        setStatusMensagem(prev => ({ ...prev, [leilaoId]: 'Enviando lance...' }));
+        setStatusMensagem({ text: 'Enviando lance...', type: 'loading' });
 
         try {
             // A requisição POST vai para a rota /lances do seu API Gateway (Flask)
@@ -63,74 +22,82 @@ function LeilaoList({ userId, apiBaseUrl }) {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-User-ID': userId, 
+                    'X-User-ID': userId, // Identificador único da sessão/usuário
                 },
                 body: JSON.stringify({
-                    id: leilaoId, 
-                    valor: valor,
-                    usuario_id: userId
+                    id: leilaoId,      // ID do Leilão
+                    valor: valor,      // Novo Valor
+                    usuario_id: userId // O usuário que fez o lance
                 }),
             });
 
             if (!response.ok) {
+                // Tratamento de erro do fetch
                 const errorData = await response.json().catch(() => ({}));
                 throw new Error(errorData.erro || `Falha no envio: HTTP ${response.status}`);
             }
 
-            // Sucesso: a confirmação virá via SSE
-            setStatusMensagem(prev => ({ ...prev, [leilaoId]: `Lance R$${valor} enviado! Aguarde confirmação em tempo real.` }));
-            setLanceValor(prev => ({ ...prev, [leilaoId]: '' }));
+            // Sucesso: a confirmação de lance deve vir via SSE
+            setStatusMensagem({ text: `Lance R$${valor.toFixed(2)} enviado para o Leilão ${leilaoId}! Aguarde confirmação em tempo real.`, type: 'success' });
+            setLanceValor(''); // Limpa apenas o campo de valor
+            // Mantém o ID do leilão para facilitar o envio de lances subsequentes
 
         } catch (error) {
-            setStatusMensagem(prev => ({ ...prev, [leilaoId]: `Erro: ${error.message}` }));
+            setStatusMensagem({ text: `Erro no envio: ${error.message}`, type: 'error' });
         }
     };
 
 
-    if (carregando) {
-        return <div className="text-center py-8 text-gray-500">A carregar leilões...</div>;
-    }
-    
-    if (erroCarga) {
-        return <div className="text-center py-8 text-red-600 font-semibold">{erroCarga}</div>;
-    }
-
-    if (leiloes.length === 0) {
-        return <div className="text-center py-8 text-gray-500">Nenhum leilão ativo encontrado. Crie um novo acima!</div>;
-    }
-
     return (
-        <div className="space-y-4">
-            {leiloes.map((leilao) => (
-                <div key={leilao.id} className="p-4 border border-gray-200 rounded-md flex justify-between items-center bg-white shadow-sm">
-                    <div>
-                        <h3 className="text-lg font-bold text-gray-800">{leilao.nome}</h3>
-                        {/* Certifique-se de que a estrutura de dados do backend corresponde a isto */}
-                        <p className="text-sm text-gray-600">Lance Atual: <span className="font-semibold text-red-600">R${leilao.lance_atual?.valor ? leilao.lance_atual.valor.toFixed(2) : leilao.valor_inicial.toFixed(2)}</span></p>
-                        <p className="text-xs text-gray-500">Último lance por: {leilao.lance_atual?.usuario || 'N/A'}</p>
-                    </div>
-                    <div className="flex flex-col items-end space-y-2">
-                        <div className="flex items-center space-x-2">
-                            <input
-                                type="number"
-                                step="0.01"
-                                placeholder="Seu lance"
-                                value={lanceValor[leilao.id] || ''}
-                                onChange={(e) => handleLanceChange(leilao.id, e.target.value)}
-                                className="w-32 border border-gray-300 rounded-md p-2 text-sm focus:ring-indigo-500 focus:border-indigo-500"
-                            />
-                            <button
-                                onClick={() => handleFazerLance(leilao.id)}
-                                className="py-2 px-4 rounded-md text-white text-sm font-medium bg-indigo-600 hover:bg-indigo-700"
-                            >
-                                Dar Lance
-                            </button>
-                        </div>
-                        {statusMensagem[leilao.id] && 
-                            <p className="text-xs mt-1 text-gray-500">{statusMensagem[leilao.id]}</p>}
-                    </div>
+        <div className="p-6 border border-gray-200 rounded-md bg-white shadow-lg">
+            <h2 className="text-xl font-semibold text-gray-700 mb-4 border-b pb-2">Realizar Novo Lance</h2>
+            
+            <form onSubmit={handleFazerLance} className="space-y-4">
+                
+                {/* Campo ID do Leilão */}
+                <div>
+                    <label className="block text-sm font-medium text-gray-700">ID do Leilão</label>
+                    <input
+                        type="text"
+                        placeholder="ID do Leilão (Ex: 1700...)"
+                        value={leilaoId}
+                        onChange={(e) => setLeilaoId(e.target.value)}
+                        required
+                        className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"
+                    />
                 </div>
-            ))}
+
+                {/* Campo Valor do Lance */}
+                <div>
+                    <label className="block text-sm font-medium text-gray-700">Valor do Lance (R$)</label>
+                    <input
+                        type="number"
+                        step="0.01"
+                        placeholder="Ex: 1500.00"
+                        value={lanceValor}
+                        onChange={(e) => setLanceValor(e.target.value)}
+                        required
+                        className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"
+                    />
+                </div>
+                
+                <button
+                    type="submit"
+                    className="w-full py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                >
+                    Realizar Lance
+                </button>
+            </form>
+            
+            {statusMensagem && (
+                <p className={`mt-4 p-2 text-sm rounded ${
+                    statusMensagem.type === 'success' ? 'bg-green-100 text-green-700' : 
+                    statusMensagem.type === 'error' ? 'bg-red-100 text-red-700' : 
+                    'bg-blue-100 text-blue-700'
+                }`}>
+                    {statusMensagem.text}
+                </p>
+            )}
         </div>
     );
 }

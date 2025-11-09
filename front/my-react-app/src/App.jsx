@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import useSSE from './hooks/useSSE';
 import LeilaoList from './components/LeilaoList';
 import LeilaoForm from './components/LeilaoForm';
+import useUniqueClientId from './hooks/useUniqueClientId';
 
 // --- Configuração da API ---
 // O API Gateway (servidor Flask) roda na porta 5000 por padrão
@@ -9,11 +10,11 @@ const API_BASE_URL = 'http://localhost:5000';
 const SSE_ENDPOINT = `${API_BASE_URL}/events/stream`; // Endpoint do Flask-SSE
 
 // Usuário simulado (ID que o servidor deve receber)
-const SIMULATED_USER_ID = 'user-abc-123'; 
+//const SIMULATED_USER_ID = 'user-abc-123'; 
 
 // --- Componente Principal ---
 function App() {
-  const [userId, setUserId] = useState(SIMULATED_USER_ID);
+  const userId = useUniqueClientId();
   const [notificacoes, setNotificacoes] = useState([]);
 
   // Use o Hook SSE para obter a última notificação
@@ -51,7 +52,7 @@ function App() {
                   }
                   break;
               case 'status_p':
-                  title = `💳 Pagamento ${parsedData.status}`;
+                  title = `Pagamento ${parsedData.status}`;
                   message = `Status do Pagamento no Leilão ${parsedData.leilao_id}: ${parsedData.status}.`;
                   break;
               default:
@@ -87,7 +88,7 @@ function App() {
           <LeilaoForm userId={userId} apiBaseUrl={API_BASE_URL} />
           
           <div className="bg-white shadow rounded-lg p-6">
-            <h2 className="text-xl font-semibold text-gray-700 mb-4 border-b pb-2">Lista de Leilões (Simulação)</h2>
+            {/* <h2 className="text-xl font-semibold text-gray-700 mb-4 border-b pb-2">Lista de Leilões (Simulação)</h2> */}
             {/* O LeilaoList deve ter um useEffect para dar GET em /leiloes e um POST em /lances */}
             <LeilaoList userId={userId} apiBaseUrl={API_BASE_URL} /> 
           </div>
