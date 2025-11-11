@@ -7,7 +7,8 @@ import useUniqueClientId from './hooks/useUniqueClientId';
 // --- Configuração da API ---
 // O API Gateway (servidor Flask) roda na porta 5000 por padrão
 const API_BASE_URL = 'http://localhost:5000';
-const SSE_ENDPOINT = `${API_BASE_URL}/events/stream`; // Endpoint do Flask-SSE
+// Flask-SSE precisa do parâmetro 'channel' para filtrar eventos
+const SSE_ENDPOINT = `${API_BASE_URL}/events/stream?channel=default`; // Endpoint do Flask-SSE
 
 // Usuário simulado (ID que o servidor deve receber)
 //const SIMULATED_USER_ID = 'user-abc-123'; 

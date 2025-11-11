@@ -217,5 +217,6 @@ def consultar_leiloes():
 if __name__ == '__main__':
     print("🚀 MS Leilão iniciado na porta 4999")
     print("📡 Monitorando ciclo de vida dos leilões...")
-    app.run(debug=True, port=4999, threaded=True)
+    # use_reloader=False evita que o Flask reinicie e perca o estado das threads
+    app.run(debug=True, port=4999, threaded=True, use_reloader=False)
 
