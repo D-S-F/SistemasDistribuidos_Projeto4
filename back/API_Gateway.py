@@ -5,25 +5,17 @@ import requests
 import threading
 import pika
 import utils
+import redis
 
-# --- Configurações ---
 app = Flask(__name__)
 app.config["REDIS_URL"] = "redis://localhost:6379"
 
-# Habilita CORS para permitir requisições do frontend
 CORS(app) 
 
 LEILAO_SERVICE_URL = 'http://localhost:4999'
 LANCE_SERVICE_URL = 'http://localhost:4998' 
 
 app.register_blueprint(sse, url_prefix='/events')
-
-# Endpoint SSE manual usando o método stream do Flask-SSE
-@app.route('/events/stream')
-def stream():
-    """Endpoint SSE que retorna eventos do Redis"""
-    channel = request.args.get('channel', 'default')
-    return sse.stream(channel=channel)
 
 ## RabbitMQ ##
 
@@ -36,9 +28,12 @@ class RabbitMQConsumer(threading.Thread):
         self.channel = None
 
     def connect(self):
+        print("[RabbitMQ] Conectando...")
         self.connection = utils.get_rabbitmq_connection()
         self.channel = self.connection.channel()
         utils.setup_queues(self.channel)
+        print("[RabbitMQ] ✅ Conectado e filas configuradas.")
+
 
     def disconnect(self):
         if self.connection and self.connection.is_open:
@@ -48,16 +43,13 @@ class RabbitMQConsumer(threading.Thread):
         with self.app_context:
             try:
                 message = body.decode('utf-8')
-                print(f"[SSE] Publicando evento {event_type}: {message}")
-                # Flask-SSE usa 'channel' para filtrar eventos por cliente
-                # Usando 'default' como canal padrão para todos os clientes
+                print(f"[SSE] Publicando evento {event_type} para o Redis: {message}")
+                
                 sse.publish(message, type=event_type, channel='default')
-                print(f"[SSE] ✅ Evento {event_type} publicado com sucesso")
+                
+                print(f"[SSE] Evento {event_type} publicado com sucesso")
             except Exception as e:
                 print(f"[ERRO SSE] Falha ao decodificar/publicar: {e}")
-                print(f"[ERRO SSE] Tipo do erro: {type(e).__name__}")
-                import traceback
-                print(f"[ERRO SSE] Traceback: {traceback.format_exc()}")
                 
     # Métodos de Callback
     
@@ -83,35 +75,39 @@ class RabbitMQConsumer(threading.Thread):
 
     def run(self):
         """Inicia o loop de consumo do RabbitMQ no thread."""
-        try:
-            self.connect()
-            
-            # Mapeamento de filas para callbacks
-            queues_callbacks = {
-                'lance_validado': self.processar_lance_validado,
-                'lance_invalidado': self.processar_lance_invalidado,
-                'leilao_vencedor': self.processar_leilao_vencedor,
-                'link_pagamento': self.processar_link_pagamento,
-                'status_pagamento': self.processar_status_pagamento,
-            }
+        print("[RabbitMQ] Thread consumidora iniciada.")
+        while True:
+            try:
+                self.connect()
+                
+                queues_callbacks = {
+                    'lance_validado': self.processar_lance_validado,
+                    'lance_invalidado': self.processar_lance_invalidado,
+                    'leilao_vencedor': self.processar_leilao_vencedor,
+                    'link_pagamento': self.processar_link_pagamento,
+                    'status_pagamento': self.processar_status_pagamento,
+                }
 
-            for queue, callback in queues_callbacks.items():
-                self.channel.basic_consume(
-                    queue=queue,
-                    on_message_callback=callback
-                )
-                print(f"[RabbitMQ] Consumindo fila: '{queue}'")
+                for queue_name, callback in queues_callbacks.items():
+                    self.channel.basic_consume(
+                        queue=queue_name,
+                        on_message_callback=callback
+                    )
+                    print(f"[RabbitMQ] Consumindo fila: '{queue_name}'")
 
-            self.channel.start_consuming()
+                print("[RabbitMQ] Aguardando mensagens...")
+                self.channel.start_consuming()
 
-        except pika.exceptions.ConnectionClosedByBroker:
-            print("Conexão fechada pelo broker. Tentando reconectar...")
-        except pika.exceptions.AMQPChannelError as e:
-             print(f"Erro no canal AMQP: {e}")
-        except Exception as e:
-            print(f"Erro fatal no thread consumidor: {e}")
-        finally:
-            self.disconnect()
+            except pika.exceptions.ConnectionClosedByBroker:
+                print("[RabbitMQ] Conexão fechada pelo broker. Tentando reconectar em 5s...")
+            except pika.exceptions.AMQPChannelError as e:
+                print(f"[RabbitMQ] Erro no canal AMQP: {e}. Reconectando em 5s...")
+            except Exception as e:
+                print(f"[RabbitMQ] Erro fatal no thread consumidor: {e}. Reconectando em 5s...")
+            finally:
+                self.disconnect()
+                import time
+                time.sleep(5)
 
 ## Rest ##
 
@@ -143,10 +139,9 @@ def add_lance():
     
     try:
         response = requests.post(f'{LANCE_SERVICE_URL}/lances', json=novo_lance, timeout=10)
-        # Retorna a resposta do MS Lance (mesmo se for erro 400)
         try:
             return jsonify(response.json()), response.status_code
-        except:
+        except requests.exceptions.JSONDecodeError:
             return jsonify({"erro": response.text}), response.status_code
     except requests.exceptions.RequestException as e:
         return jsonify({"erro": f"Erro de comunicação com Serviço Lance: {e}"}), 503
@@ -155,13 +150,12 @@ def add_lance():
 if __name__ == '__main__':
     # Verifica conexão com Redis antes de iniciar
     try:
-        import redis
         redis_client = redis.from_url(app.config['REDIS_URL'])
         redis_client.ping()
-        print(f"✅ Redis conectado com sucesso em: {app.config['REDIS_URL']}")
+        print(f"Redis conectado com sucesso em: {app.config['REDIS_URL']}")
     except Exception as e:
-        print(f"⚠️  AVISO: Não foi possível conectar ao Redis: {e}")
-        print(f"   O SSE não funcionará, mas o Gateway continuará rodando")
+        print(f"AVISO: Não foi possível conectar ao Redis: {e}")
+        print(f"O SSE (Flask-SSE) não funcionará.")
     
     app_context = app.app_context() 
 
@@ -169,7 +163,7 @@ if __name__ == '__main__':
     consumer_thread.start()
     
     print("Iniciando API Gateway (Flask)...")
-    print(f"🌐 SSE endpoint: http://localhost:5000/events/stream")
-    print(f"📡 Certifique-se de que o Redis está rodando em: {app.config['REDIS_URL']}")
-    # use_reloader=False evita problemas com threads e estado
+    
+    # -----------------------
+    
     app.run(debug=True, threaded=True, port=5000, use_reloader=False)

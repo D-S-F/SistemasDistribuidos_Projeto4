@@ -11,7 +11,7 @@ const useSSE = (sseUrl) => {
   useEffect(() => {
     // Cria a conexão EventSource
     console.log(`[SSE] Tentando conectar à stream: ${sseUrl}`);
-    const eventSource = new EventSource(sseUrl);
+    const eventSource = new EventSource("http://localhost:5000/events");
 
     // Listener para o evento padrão 'message' (fallback/geral)
     eventSource.onmessage = (event) => {
