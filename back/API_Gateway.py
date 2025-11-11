@@ -1,4 +1,5 @@
 from flask import Flask, jsonify, request
+from flask_cors import CORS
 from flask_sse import sse
 import requests
 import threading
@@ -7,7 +8,10 @@ import utils
 
 # --- Configurações ---
 app = Flask(__name__)
-app.config["REDIS_URL"] = "redis://172.17.0.2" 
+app.config["REDIS_URL"] = "redis://172.17.0.2"
+
+# Habilita CORS para permitir requisições do frontend
+CORS(app) 
 
 LEILAO_SERVICE_URL = 'http://localhost:4999'
 LANCE_SERVICE_URL = 'http://localhost:4998' 

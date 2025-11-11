@@ -12,12 +12,21 @@ def get_rabbitmq_connection():
     return connection
 
 def setup_queues(channel):
-    #channel.queue_declare(queue='leilao_iniciado', durable=True)
+    """Configura todas as filas necessárias para o sistema de leilões"""
+    channel.queue_declare(queue='leilao_iniciado', durable=True)
+    channel.queue_declare(queue='leilao_finalizado', durable=True)
     channel.queue_declare(queue='lance_validado', durable=True)
     channel.queue_declare(queue='lance_invalidado', durable=True)
     channel.queue_declare(queue='leilao_vencedor', durable=True)
     channel.queue_declare(queue='link_pagamento', durable=True)
     channel.queue_declare(queue='status_pagamento', durable=True)
+
+def get_rabbitmq_channel():
+    """Retorna um canal RabbitMQ para uso direto"""
+    connection = get_rabbitmq_connection()
+    channel = connection.channel()
+    setup_queues(channel)
+    return channel
 
 # def generate_keys():
 #     """Gera chaves pública e privada de acordo com o ID do processo cliente"""
