@@ -7,15 +7,21 @@ import pika
 import utils
 import redis
 
+# --- Configurações ---
 app = Flask(__name__)
 app.config["REDIS_URL"] = "redis://localhost:6379"
 
-CORS(app) 
+CORS(
+    app,
+    resources={r"/*": {"origins": ["http://localhost:3000", "http://localhost:5173"]}},
+    supports_credentials=False,
+)
+# -------------------------------------
 
 LEILAO_SERVICE_URL = 'http://localhost:4999'
 LANCE_SERVICE_URL = 'http://localhost:4998' 
 
-app.register_blueprint(sse, url_prefix='/events')
+app.register_blueprint(sse, url_prefix='/events/stream')
 
 ## RabbitMQ ##
 
@@ -32,7 +38,7 @@ class RabbitMQConsumer(threading.Thread):
         self.connection = utils.get_rabbitmq_connection()
         self.channel = self.connection.channel()
         utils.setup_queues(self.channel)
-        print("[RabbitMQ] ✅ Conectado e filas configuradas.")
+        print("[RabbitMQ] Conectado e filas configuradas.")
 
 
     def disconnect(self):
@@ -44,9 +50,7 @@ class RabbitMQConsumer(threading.Thread):
             try:
                 message = body.decode('utf-8')
                 print(f"[SSE] Publicando evento {event_type} para o Redis: {message}")
-                
-                sse.publish(message, type=event_type, channel='default')
-                
+                sse.publish(message, type=event_type)
                 print(f"[SSE] Evento {event_type} publicado com sucesso")
             except Exception as e:
                 print(f"[ERRO SSE] Falha ao decodificar/publicar: {e}")
@@ -74,12 +78,10 @@ class RabbitMQConsumer(threading.Thread):
         ch.basic_ack(delivery_tag=method.delivery_tag)
 
     def run(self):
-        """Inicia o loop de consumo do RabbitMQ no thread."""
         print("[RabbitMQ] Thread consumidora iniciada.")
         while True:
             try:
                 self.connect()
-                
                 queues_callbacks = {
                     'lance_validado': self.processar_lance_validado,
                     'lance_invalidado': self.processar_lance_invalidado,
@@ -87,19 +89,16 @@ class RabbitMQConsumer(threading.Thread):
                     'link_pagamento': self.processar_link_pagamento,
                     'status_pagamento': self.processar_status_pagamento,
                 }
-
                 for queue_name, callback in queues_callbacks.items():
                     self.channel.basic_consume(
                         queue=queue_name,
                         on_message_callback=callback
                     )
                     print(f"[RabbitMQ] Consumindo fila: '{queue_name}'")
-
                 print("[RabbitMQ] Aguardando mensagens...")
                 self.channel.start_consuming()
-
             except pika.exceptions.ConnectionClosedByBroker:
-                print("[RabbitMQ] Conexão fechada pelo broker. Tentando reconectar em 5s...")
+                print("[RabbitF_MQ] Conexão fechada pelo broker. Tentando reconectar em 5s...")
             except pika.exceptions.AMQPChannelError as e:
                 print(f"[RabbitMQ] Erro no canal AMQP: {e}. Reconectando em 5s...")
             except Exception as e:
@@ -124,7 +123,6 @@ def get_leiloes_ativos():
 def add_leilao():
     novo_leilao = request.get_json()
     print(f"Adicionando novo leilao: {novo_leilao.get('id')} | {novo_leilao.get('desc')}")
-    
     try:
         response = requests.post(f'{LEILAO_SERVICE_URL}/leiloes', json=novo_leilao)
         response.raise_for_status()
@@ -136,7 +134,6 @@ def add_leilao():
 def add_lance():
     novo_lance = request.get_json()
     print(f"Novo lance realizado no leilao {novo_lance.get('id')} de {novo_lance.get('valor')} reais")
-    
     try:
         response = requests.post(f'{LANCE_SERVICE_URL}/lances', json=novo_lance, timeout=10)
         try:
@@ -148,14 +145,12 @@ def add_lance():
 
 
 if __name__ == '__main__':
-    # Verifica conexão com Redis antes de iniciar
     try:
         redis_client = redis.from_url(app.config['REDIS_URL'])
         redis_client.ping()
         print(f"Redis conectado com sucesso em: {app.config['REDIS_URL']}")
     except Exception as e:
         print(f"AVISO: Não foi possível conectar ao Redis: {e}")
-        print(f"O SSE (Flask-SSE) não funcionará.")
     
     app_context = app.app_context() 
 
@@ -163,7 +158,5 @@ if __name__ == '__main__':
     consumer_thread.start()
     
     print("Iniciando API Gateway (Flask)...")
-    
-    # -----------------------
     
     app.run(debug=True, threaded=True, port=5000, use_reloader=False)

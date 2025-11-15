@@ -5,26 +5,18 @@ import LeilaoForm from './components/LeilaoForm';
 import useUniqueClientId from './hooks/useUniqueClientId';
 
 // --- Configuração da API ---
-// O API Gateway (servidor Flask) roda na porta 5000 por padrão
 const API_BASE_URL = 'http://localhost:5000';
-// Flask-SSE precisa do parâmetro 'channel' para filtrar eventos
-const SSE_ENDPOINT = `${API_BASE_URL}/events/stream?channel=default`; // Endpoint do Flask-SSE
-
-// Usuário simulado (ID que o servidor deve receber)
-//const SIMULATED_USER_ID = 'user-abc-123'; 
+const SSE_ENDPOINT = `${API_BASE_URL}/events/stream`;
 
 // --- Componente Principal ---
 function App() {
   const userId = useUniqueClientId();
   const [notificacoes, setNotificacoes] = useState([]);
 
-  // Use o Hook SSE para obter a última notificação
   const latestNotification = useSSE(SSE_ENDPOINT);
 
-  // Efeito para processar novas notificações
   useEffect(() => {
     if (latestNotification) {
-      // Cria uma mensagem legível
       const { type, data } = latestNotification;
       let title = "Notificação Recebida";
       let message = JSON.stringify(data);
