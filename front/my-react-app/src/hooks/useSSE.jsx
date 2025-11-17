@@ -9,7 +9,7 @@ const useSSE = (sseUrl) => {
 
   useEffect(() => {
     console.log(`[SSE] Tentando conectar à stream: ${sseUrl}`);
-    const eventSource = new EventSource("events/stream");
+    const eventSource = new EventSource(sseUrl);
 
     eventSource.onmessage = (event) => {
       setLatestEvent({

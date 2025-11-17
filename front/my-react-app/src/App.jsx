@@ -2,18 +2,19 @@ import React, { useState, useEffect } from 'react';
 import useSSE from './hooks/useSSE';
 import LeilaoList from './components/LeilaoList';
 import LeilaoForm from './components/LeilaoForm';
+import LeilaoManager from './components/LeilaoManager';
 import useUniqueClientId from './hooks/useUniqueClientId';
 
 // --- Configuração da API ---
 const API_BASE_URL = 'http://localhost:5000';
-const SSE_ENDPOINT = `${API_BASE_URL}/events/stream`;
+const SSE_ENDPOINT = `events/stream`;
 
 // --- Componente Principal ---
 function App() {
   const userId = useUniqueClientId();
   const [notificacoes, setNotificacoes] = useState([]);
 
-  const latestNotification = useSSE(SSE_ENDPOINT);
+  const latestNotification = useSSE(`${SSE_ENDPOINT}?channel=${userId}`);
 
   useEffect(() => {
     if (latestNotification) {
@@ -82,9 +83,9 @@ function App() {
           
           <div className="bg-white shadow rounded-lg p-6">
             {/* <h2 className="text-xl font-semibold text-gray-700 mb-4 border-b pb-2">Lista de Leilões (Simulação)</h2> */}
-            {/* O LeilaoList deve ter um useEffect para dar GET em /leiloes e um POST em /lances */}
             <LeilaoList userId={userId} apiBaseUrl={API_BASE_URL} /> 
           </div>
+          <LeilaoManager cliente_id={userId} />
         </div>
 
         {/* Coluna Lateral: Notificações em Tempo Real (SSE) */}

@@ -2,9 +2,7 @@ import React, { useState } from 'react';
 
 function LeilaoForm({ userId, apiBaseUrl }) {
     const [descricao, setDescricao] = useState('');
-    // REMOVIDO: const [valorInicial, setValorInicial] = useState('');
-    
-    // NOVO: Estado para armazenar a data e hora de finalização
+
     const [horaFinalizacao, setHoraFinalizacao] = useState('');
     
     const [mensagem, setMensagem] = useState(null);
@@ -13,12 +11,9 @@ function LeilaoForm({ userId, apiBaseUrl }) {
         event.preventDefault();
         setMensagem({ text: 'Criando leilão...', type: 'loading' });
 
-        // Estrutura de dados atualizada
         const novoLeilao = {
             desc: descricao,
-            // REMOVIDO: valor: parseFloat(valorInicial),
-            
-            // NOVO: Envia a hora de finalização
+
             hora_finalizacao: horaFinalizacao, 
             
             criador_id: userId,
@@ -26,7 +21,6 @@ function LeilaoForm({ userId, apiBaseUrl }) {
         };
 
         try {
-            // Requisição POST para a rota /leiloes do seu API Gateway
             const response = await fetch(`${apiBaseUrl}/leiloes`, {
                 method: 'POST',
                 headers: {
@@ -44,7 +38,7 @@ function LeilaoForm({ userId, apiBaseUrl }) {
             const data = await response.json();
             setMensagem({ text: `Leilão '${data.desc}' criado com sucesso! ID: ${data.id}`, type: 'success' });
             setDescricao('');
-            setHoraFinalizacao(''); // Limpa o campo de hora
+            setHoraFinalizacao('');
 
         } catch (error) {
             setMensagem({ text: `Erro ao criar leilão: ${error.message}`, type: 'error' });
@@ -67,18 +61,16 @@ function LeilaoForm({ userId, apiBaseUrl }) {
                     />
                 </div>
                 
-                {/* INÍCIO DO NOVO CAMPO: HORA DE FINALIZAÇÃO */}
                 <div>
                     <label className="block text-sm font-medium text-gray-700">Hora de Finalização</label>
                     <input
-                        type="datetime-local" // Permite selecionar Data e Hora
+                        type="datetime-local"
                         value={horaFinalizacao}
                         onChange={(e) => setHoraFinalizacao(e.target.value)}
                         required
                         className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"
                     />
                 </div>
-                {/* FIM DO NOVO CAMPO */}
                 
                 <button
                     type="submit"

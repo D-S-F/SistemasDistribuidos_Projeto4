@@ -6,6 +6,7 @@ import threading
 import pika
 import utils
 import redis
+import json
 
 # --- Configurações ---
 app = Flask(__name__)
@@ -22,6 +23,8 @@ LEILAO_SERVICE_URL = 'http://localhost:4999'
 LANCE_SERVICE_URL = 'http://localhost:4998' 
 
 app.register_blueprint(sse, url_prefix='/events/stream')
+
+interests = {}
 
 ## RabbitMQ ##
 
@@ -50,10 +53,30 @@ class RabbitMQConsumer(threading.Thread):
             try:
                 message = body.decode('utf-8')
                 print(f"[SSE] Publicando evento {event_type} para o Redis: {message}")
-                sse.publish(message, type=event_type)
+
+                evento = json.loads(message)
+
+                leilao_id = evento.get('id')
+                if not leilao_id:
+                    print(f"[AVISO SSE] Evento {event_type} recebido SEM 'leilao_id'. Mensagem: {message}")
+                    return
+
+                lista_de_interessados = interests.get(leilao_id)
+
+                if not lista_de_interessados:
+                    print(f"[AVISO SSE] Evento {event_type} para leilão {leilao_id}, mas ninguém está a seguir.")
+                    return
+
+                print(f"[SSE] Enviando {event_type} para {len(lista_de_interessados)} seguidores do leilão {leilao_id}...")
+                for cliente in lista_de_interessados:
+                    sse.publish(message, type=event_type, channel=cliente)
+
                 print(f"[SSE] Evento {event_type} publicado com sucesso")
+
+            except json.JSONDecodeError as json_err:
+                print(f"[ERRO SSE] Mensagem recebida não é um JSON válido: {body.decode('utf-8')} | Erro: {json_err}")
             except Exception as e:
-                print(f"[ERRO SSE] Falha ao decodificar/publicar: {e}")
+                print(f"[ERRO SSE] Falha inesperada ao publicar: {e}")
                 
     # Métodos de Callback
     
@@ -110,15 +133,6 @@ class RabbitMQConsumer(threading.Thread):
 
 ## Rest ##
 
-@app.route('/leiloes/ativos', methods=['GET'])
-def get_leiloes_ativos():
-    try:
-        response = requests.get(f'{LEILAO_SERVICE_URL}/leiloes')
-        response.raise_for_status() 
-        return jsonify(response.json()), response.status_code
-    except requests.exceptions.RequestException as e:
-        return jsonify({"erro": f"Erro de comunicação com Serviço Leilão: {e}"}), 503
-
 @app.route('/leiloes', methods=['POST'])
 def add_leilao():
     novo_leilao = request.get_json()
@@ -142,7 +156,61 @@ def add_lance():
             return jsonify({"erro": response.text}), response.status_code
     except requests.exceptions.RequestException as e:
         return jsonify({"erro": f"Erro de comunicação com Serviço Lance: {e}"}), 503
+    
+@app.route('/interest', methods=['POST'])
+def add_interest():
+    interest = request.get_json()
+    leilao_id = interest.get('leilao_id')
+    cliente_id = interest.get('cliente_id')
+    if not cliente_id or not leilao_id:
+        return jsonify({"erro": "Faltam cliente_id ou leilao_id"}), 400
 
+    lista_de_interessados = interests.get(leilao_id)
+
+    if lista_de_interessados is not None:
+        if cliente_id not in lista_de_interessados:
+            lista_de_interessados.append(cliente_id)
+    else:
+        interests[leilao_id] = [cliente_id]
+
+    return jsonify({"sucesso": f"Cliente {cliente_id} a seguir o leilão {leilao_id}"})
+        
+@app.route('/interest', methods=['DELETE'])
+def del_interest():
+    data = request.get_json()
+    leilao_id = data.get('leilao_id')
+    cliente_id = data.get('cliente_id')
+
+    if not leilao_id or not cliente_id:
+        return jsonify({"erro": "Faltam cliente_id ou leilao_id"}), 400
+
+    lista_de_interessados = interests.get(leilao_id)
+
+    if lista_de_interessados is None:
+        return jsonify({"aviso": "Leilão não encontrado nos interesses"}), 404
+
+    if cliente_id in lista_de_interessados:
+        lista_de_interessados.remove(cliente_id)
+        
+        print(f"[interesses] Interesse removido de {cliente_id} por {leilao_id}")
+        
+        if not lista_de_interessados:
+            del interests[leilao_id]
+            print(f"[interesses] Lista do leilão {leilao_id} removida por estar vazia.")
+
+        return jsonify({"sucesso": "Interesse removido"}), 200
+    else:
+        return jsonify({"aviso": "Cliente não estava na lista de interesses"}), 200
+
+
+@app.route('/leiloes/ativos', methods=['GET'])
+def get_leiloes_ativos():
+    try:
+        response = requests.get(f'{LEILAO_SERVICE_URL}/leiloes')
+        response.raise_for_status() 
+        return jsonify(response.json()), response.status_code
+    except requests.exceptions.RequestException as e:
+        return jsonify({"erro": f"Erro de comunicação com Serviço Leilão: {e}"}), 503
 
 if __name__ == '__main__':
     try:
