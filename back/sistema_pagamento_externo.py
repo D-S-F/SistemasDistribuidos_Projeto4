@@ -70,7 +70,6 @@ def processar_pagamento(transacao_id):
     POST: Processa o pagamento (JSON ou Form Data).
     """
     
-    # --- Lógica para o Navegador (GET) ---
     if request.method == 'GET':
         transacao = transacoes.get(transacao_id)
         if not transacao:
@@ -79,7 +78,6 @@ def processar_pagamento(transacao_id):
         if transacao['status'] != 'pendente':
             return f"<h1>Transação já processada: {transacao['status']}</h1>", 400
 
-        # Retorna um HTML simples simulando a tela do Gateway de Pagamento
         return f'''
         <html>
             <body style="font-family: sans-serif; text-align: center; padding: 50px;">
@@ -109,9 +107,6 @@ def processar_pagamento(transacao_id):
         </html>
         '''
 
-    # --- Lógica de Processamento (POST) ---
-    
-    # Tenta pegar dados via JSON (se vier de API) ou via FORM (se vier do navegador)
     dados = request.get_json(silent=True) or request.form
     
     if not dados:
@@ -131,16 +126,13 @@ def processar_pagamento(transacao_id):
         return jsonify({"erro": "Transação não encontrada"}), 404
 
     if transacao['status'] != 'pendente':
-        # Se for via navegador, retorna HTML amigável
         if not request.is_json:
             return f"<h1>Erro: Transação já processada ({transacao['status']})</h1>"
         return jsonify({"erro": f"Transação já processada. Status atual: {transacao['status']}"}), 400
 
-    # Atualiza status da transação
     transacao['status'] = status
     transacao['processado_em'] = datetime.now().isoformat()
     
-    # Envia webhook ao MS Pagamento (Thread separada)
     threading.Thread(
         target=enviar_webhook,
         args=(transacao,),
@@ -151,14 +143,12 @@ def processar_pagamento(transacao_id):
     
     # Resposta final
     if request.is_json:
-        # Se quem chamou foi uma API (Postman/cURL)
         return jsonify({
             "transacao_id": transacao_id,
             "status": status,
             "mensagem": f"Pagamento {status} com sucesso"
         }), 200
     else:
-        # Se quem chamou foi o Navegador, mostra página de sucesso
         cor = "green" if status == 'aprovado' else "red"
         return f"<h1 style='color: {cor}; text-align: center; margin-top: 50px;'>Pagamento {status.upper()}!</h1><p style='text-align: center;'>Você pode fechar esta janela.</p>"
 
