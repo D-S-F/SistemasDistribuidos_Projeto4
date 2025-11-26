@@ -36,7 +36,7 @@ class ConsumidorEventos(threading.Thread):
         """Processa evento de leilão iniciado"""
         try:
             evento = json.loads(body.decode('utf-8'))
-            leilao_id = str(evento.get('leilao_id'))  # Garante que é string
+            leilao_id = str(evento.get('id'))  # Garante que é string
             
             if leilao_id:
                 with lock_leiloes:
@@ -55,7 +55,7 @@ class ConsumidorEventos(threading.Thread):
         """Processa evento de leilão finalizado"""
         try:
             evento = json.loads(body.decode('utf-8'))
-            leilao_id = str(evento.get('leilao_id'))  # Garante que é string
+            leilao_id = str(evento.get('id'))  # Garante que é string
             
             with lock_leiloes:
                 if leilao_id in leiloes_ativos:
@@ -67,14 +67,14 @@ class ConsumidorEventos(threading.Thread):
                     if vencedor and vencedor.get("usuario_id"):
                         # Publica evento leilao_vencedor
                         evento_vencedor = {
-                            "leilao_id": leilao_id,
+                            "id": leilao_id,
                             "vencedor_id": vencedor["usuario_id"],
                             "valor": vencedor["valor"]
                         }
                         
                         self.channel.basic_publish(
-                            exchange='',
-                            routing_key='leilao_vencedor',
+                            exchange='leilao_vencedor',
+                            routing_key='',
                             body=json.dumps(evento_vencedor),
                             properties=pika.BasicProperties(delivery_mode=2)
                         )
@@ -192,7 +192,7 @@ def receber_lance():
     
     return jsonify({
         "mensagem": "Lance aceito",
-        "leilao_id": leilao_id,
+        "id": leilao_id,
         "valor": valor
     }), 200
 

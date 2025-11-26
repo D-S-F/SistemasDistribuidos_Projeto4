@@ -38,7 +38,7 @@ class ConsumidorVencedor(threading.Thread):
         """Processa evento de leilão vencedor e gera link de pagamento"""
         try:
             evento = json.loads(body.decode('utf-8'))
-            leilao_id = evento.get('leilao_id')
+            leilao_id = evento.get('id')
             vencedor_id = evento.get('vencedor_id')
             valor = evento.get('valor')
             
@@ -55,7 +55,7 @@ class ConsumidorVencedor(threading.Thread):
                 "valor": valor,
                 "moeda": "BRL",
                 "cliente_id": vencedor_id,
-                "leilao_id": leilao_id,
+                "id": leilao_id,
                 "descricao": f"Pagamento do leilão {leilao_id}"
             }
 
@@ -85,7 +85,7 @@ class ConsumidorVencedor(threading.Thread):
 
                     # Publica evento link_pagamento
                     evento_link = {
-                        "leilao_id": leilao_id,
+                        "id": leilao_id,
                         "vencedor_id": vencedor_id,
                         "link": link_pagamento,
                         "valor": valor
@@ -108,7 +108,7 @@ class ConsumidorVencedor(threading.Thread):
                 print(f"[MS Pagamento] ❌ Erro ao comunicar com sistema externo: {e}")
                 # Publica evento de erro
                 evento_erro = {
-                    "leilao_id": leilao_id,
+                    "id": leilao_id,
                     "vencedor_id": vencedor_id,
                     "erro": f"Erro de comunicação: {str(e)}"
                 }
@@ -122,7 +122,7 @@ class ConsumidorVencedor(threading.Thread):
                 print(f"[MS Pagamento] ❌ Erro ao gerar link de pagamento: {e}")
                 # Publica evento de erro
                 evento_erro = {
-                    "leilao_id": leilao_id,
+                    "id": leilao_id,
                     "vencedor_id": vencedor_id,
                     "erro": str(e)
                 }
@@ -144,8 +144,12 @@ class ConsumidorVencedor(threading.Thread):
         try:
             self.connect()
             
+            exchange = self.channel.queue_declare(queue='', exclusive=True)
+            self.aux_queue = exchange.method.queue
+            self.channel.queue_bind(exchange='leilao_vencedor', queue=self.aux_queue)
+
             self.channel.basic_consume(
-                queue='leilao_vencedor',
+                queue=self.aux_queue,
                 on_message_callback=self.processar_leilao_vencedor
             )
             
@@ -176,7 +180,7 @@ def webhook_pagamento():
         return jsonify({"erro": "Dados não fornecidos"}), 400
 
     # Campos esperados do webhook
-    leilao_id = dados.get('leilao_id')
+    leilao_id = dados.get('id')
     status = dados.get('status')  # 'aprovado' ou 'recusado'
     transacao_id = dados.get('transacao_id', '')
     
@@ -195,7 +199,7 @@ def webhook_pagamento():
 
     # Publica evento status_pagamento
     evento_status = {
-        "leilao_id": leilao_id,
+        "id": leilao_id,
         "vencedor_id": pagamento.get("vencedor_id"),
         "status": status,
         "valor": pagamento.get("valor"),
@@ -218,7 +222,7 @@ def webhook_pagamento():
 
     return jsonify({
         "mensagem": f"Status do pagamento processado: {status}",
-        "leilao_id": leilao_id
+        "id": leilao_id
     }), 200
 
 @app.route('/pagamentos/pendentes', methods=['GET'])

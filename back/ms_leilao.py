@@ -35,7 +35,7 @@ class CicloVidaLeilao(threading.Thread):
     def publicar_leilao_iniciado(self, leilao_id: str, leilao: Dict):
         """Publica evento de leilão iniciado"""
         evento = {
-            "leilao_id": leilao_id,
+            "id": leilao_id,
             "desc": leilao.get("desc", ""),
             "valor_inicial": leilao.get("valor_inicial", 0),
             "inicio": leilao.get("inicio", ""),
@@ -52,7 +52,7 @@ class CicloVidaLeilao(threading.Thread):
     def publicar_leilao_finalizado(self, leilao_id: str, leilao: Dict):
         """Publica evento de leilão finalizado"""
         evento = {
-            "leilao_id": leilao_id,
+            "id": leilao_id,
             "desc": leilao.get("desc", ""),
             "fim": leilao.get("fim", "")
         }

@@ -35,12 +35,16 @@ class RabbitMQConsumer(threading.Thread):
         self.app_context = app_context
         self.connection = None
         self.channel = None
+        self.aux_queue = None
 
     def connect(self):
         print("[RabbitMQ] Conectando...")
         self.connection = utils.get_rabbitmq_connection()
         self.channel = self.connection.channel()
         utils.setup_queues(self.channel)
+        exchange = self.channel.queue_declare(queue='', exclusive=True)
+        self.aux_queue = exchange.method.queue
+        self.channel.queue_bind(exchange='leilao_vencedor', queue=self.aux_queue)
         print("[RabbitMQ] Conectado e filas configuradas.")
 
 
@@ -108,7 +112,7 @@ class RabbitMQConsumer(threading.Thread):
                 queues_callbacks = {
                     'lance_validado': self.processar_lance_validado,
                     'lance_invalidado': self.processar_lance_invalidado,
-                    'leilao_vencedor': self.processar_leilao_vencedor,
+                    self.aux_queue: self.processar_leilao_vencedor,
                     'link_pagamento': self.processar_link_pagamento,
                     'status_pagamento': self.processar_status_pagamento,
                 }
@@ -178,7 +182,7 @@ def add_interest():
 @app.route('/interest', methods=['DELETE'])
 def del_interest():
     data = request.get_json()
-    leilao_id = data.get('leilao_id')
+    leilao_id = data.get('id')
     cliente_id = data.get('cliente_id')
 
     if not leilao_id or not cliente_id:

@@ -17,7 +17,8 @@ def setup_queues(channel):
     channel.queue_declare(queue='leilao_finalizado', durable=True)
     channel.queue_declare(queue='lance_validado', durable=True)
     channel.queue_declare(queue='lance_invalidado', durable=True)
-    channel.queue_declare(queue='leilao_vencedor', durable=True)
+    #channel.queue_declare(queue='leilao_vencedor', durable=True)
+    channel.exchange_declare(exchange='leilao_vencedor', exchange_type='fanout')
     channel.queue_declare(queue='link_pagamento', durable=True)
     channel.queue_declare(queue='status_pagamento', durable=True)
 

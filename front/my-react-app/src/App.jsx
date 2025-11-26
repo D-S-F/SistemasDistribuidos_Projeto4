@@ -36,18 +36,18 @@ function App() {
                   break;
               case 'leilao_v':
                   title = "Leilão Encerrado - Vencedor!";
-                  message = `O Leilão ID ${parsedData.leilao_id} foi para o usuário ${parsedData.vencedor_id}.`;
+                  message = `O Leilão ID ${parsedData.id} foi para o usuário ${parsedData.vencedor_id}.`;
                   break;
               case 'link_p':
                   title = "Link de Pagamento Gerado";
-                  message = `Acesse: ${parsedData.link} (ID: ${parsedData.leilao_id})`;
+                  message = `Acesse: ${parsedData.link} (ID: ${parsedData.id})`;
                   if (parsedData.vencedor_id === userId) {
                        window.alert(`PARABÉNS! Link de Pagamento: ${parsedData.link}`);
                   }
                   break;
               case 'status_p':
                   title = `Pagamento ${parsedData.status}`;
-                  message = `Status do Pagamento no Leilão ${parsedData.leilao_id}: ${parsedData.status}.`;
+                  message = `Status do Pagamento no Leilão ${parsedData.id}: ${parsedData.status}.`;
                   break;
               default:
                   title = `Evento Desconhecido (${type})`;
