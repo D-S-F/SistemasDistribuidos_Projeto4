@@ -182,7 +182,7 @@ def add_interest():
 @app.route('/interest', methods=['DELETE'])
 def del_interest():
     data = request.get_json()
-    leilao_id = data.get('id')
+    leilao_id = data.get('leilao_id')
     cliente_id = data.get('cliente_id')
 
     if not leilao_id or not cliente_id:
